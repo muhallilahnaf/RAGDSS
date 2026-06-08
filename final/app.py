@@ -106,6 +106,10 @@ section.main > div {
     border-top: none !important;
     border-radius: 0 0 6px 6px !important;
 }
+            
+.stExpander details summary span {
+    background-color: #black !important;
+}
 
 /* Code blocks */
 .stCodeBlock {
