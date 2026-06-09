@@ -343,7 +343,7 @@ if st.session_state.init_error:
 
 # ── Question Input ────────────────────────────────────────────────────────────
 
-col_input, col_btn = st.columns([5, 1])
+col_input, col_role, col_pref, col_btn = st.columns([3, 1.2, 1.2, 0.8])
 
 with col_input:
     question = st.text_area(
@@ -353,6 +353,24 @@ with col_input:
         label_visibility="collapsed",
         key="question_area",
         value=st.session_state.question_input,
+    )
+
+with col_role:
+    role = st.selectbox(
+        "Role",
+        ["Product Manager", "Marketing Manager", "Customer Support Manager",
+         "Supply Chain Manager", "Quality Assurance Manager",
+         "Executive / Director", "Sales Manager"],
+        label_visibility="visible",
+    )
+
+with col_pref:
+    answer_pref = st.selectbox(
+        "Answer Type",
+        ["Summary", "Root Cause Analysis", "Recommendations", "Risk Assessment",
+         "Competitive Insights", "Customer Sentiment Analysis",
+         "Trend Analysis", "Decision Support Report"],
+        label_visibility="visible",
     )
 
 with col_btn:
@@ -408,7 +426,7 @@ if run_clicked and question.strip():
 
     with st.spinner("Running pipeline..."):
         try:
-            result = run_query(question.strip(), st.session_state.dss_state)
+            result = run_query(question.strip(), role, answer_pref, st.session_state.dss_state)
             st.session_state.current_result = result
             st.session_state.history.append(result)
             st.session_state.question_input = ""
@@ -442,6 +460,12 @@ if result:
     n_products = len(result["rows"])
     n_reviews = len(result["df_filtered"])
     n_retrieved = len(result["retrieved_reviews"])
+
+    st.markdown(f"""
+        <span class='metric-chip'>Role: <span>{result['role']}</span></span>
+        <span class='metric-chip'>Answer Type: <span>{result['answer_pref']}</span></span>
+    """, unsafe_allow_html=True,
+    )
 
     st.markdown(f"""
     <div style='margin-bottom:1.2rem;'>

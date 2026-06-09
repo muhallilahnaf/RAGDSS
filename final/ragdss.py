@@ -73,7 +73,7 @@ def initialize():
 
 # ── Step 1: Query Decomposition ───────────────────────────────────────────────
 
-def decompose_query(question: str, state: dict) -> dict:
+def decompose_query(question: str, role: str, answer_pref: str, state: dict) -> dict:
     """
     LLM Call #1: extract structured filters + semantic intent from the question.
     Returns parsed filter JSON dict.
@@ -101,7 +101,7 @@ def decompose_query(question: str, state: dict) -> dict:
     prompt = f"""
     You are an information extraction system.
 
-    Your task is to analyze a business question and extract:
+    Your task is to analyze a business question for a {role} and extract:
     1. Structured filters (ONLY for the {FILTER_TABLE} table)
     2. Semantic intent (for review search)
 
@@ -115,7 +115,7 @@ def decompose_query(question: str, state: dict) -> dict:
     - Only extract filters that map directly to the schema
     - Only use the brands and product names provided here as filter
     - Do NOT infer values not explicitly mentioned
-    - Keep semantic intent focused on qualitative aspects (e.g., battery, durability, complaints)
+    - Keep semantic intent focused on {role} and {answer_pref} (e.g., Summary based on battery, durability, complaints)
     - If a filter is not present, omit it
 
     Return STRICT JSON:
@@ -290,7 +290,7 @@ def vectorize_reviews(product_id: str, df_reviews_filtered: pd.DataFrame, state:
 
 # ── Step 5: Rewrite Semantic Query ────────────────────────────────────────────
 
-def rewrite_semantic_query(question: str, filter_json: dict, state: dict) -> str:
+def rewrite_semantic_query(question: str, filter_json: dict, role: str, answer_pref: str, state: dict) -> str:
     """
     LLM Call #3: rewrite the question into a clean semantic search phrase.
     """
@@ -305,7 +305,7 @@ def rewrite_semantic_query(question: str, filter_json: dict, state: dict) -> str
 
     Rules:
     - Do NOT include brand, price, color, year, etc. if already used as filters
-    - Focus on user intent (issues, satisfaction, performance, complaints)
+    - Focus on user intent ({role}) and answer preference ({answer_pref})
     - If no semantic intent exists, return: "general product feedback"
 
     Input:
@@ -342,7 +342,14 @@ def retrieve_reviews(collection, semantic_query: str) -> list[str]:
 
 # ── Step 7: Final Answer Generation ──────────────────────────────────────────
 
-def generate_answer(question: str, semantic_query: str, retrieved_reviews: list[str], state: dict) -> str:
+def generate_answer(
+        question: str, 
+        semantic_query: str, 
+        retrieved_reviews: list[str], 
+        role: str, 
+        answer_pref: str, 
+        state: dict
+    ) -> str:
     """
     LLM Call #4: synthesize a business-analyst-style answer from retrieved reviews.
     """
@@ -351,7 +358,8 @@ def generate_answer(question: str, semantic_query: str, retrieved_reviews: list[
     prompt = f"""
     You are a business analyst.
 
-    Answer the user's question using ONLY the provided review data.
+    Answer the user's ({role}) question using ONLY the provided review data.
+    Keep in mind the answer preference: {answer_pref}.
 
     Rules:
     - Base your answer strictly on the reviews
@@ -384,12 +392,12 @@ def generate_answer(question: str, semantic_query: str, retrieved_reviews: list[
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
-def run_query(question: str, state: dict) -> dict:
+def run_query(question: str, role: str, answer_pref: str, state: dict) -> dict:
     """
     Full pipeline for one question. Returns a result dict with all intermediate
     outputs for display. Raises NoRowsError if SQL returns no results.
     """
-    filter_json = decompose_query(question, state)
+    filter_json = decompose_query(question, role, answer_pref, state)
     llm_sql = generate_sql(filter_json, state)
     validated_sql, rows = validate_and_execute_sql(llm_sql, state)
 
@@ -407,9 +415,9 @@ def run_query(question: str, state: dict) -> dict:
     primary_product_id = rows[0][0]
     collection = vectorize_reviews(primary_product_id, df_filtered, state)
 
-    semantic_query = rewrite_semantic_query(question, filter_json, state)
+    semantic_query = rewrite_semantic_query(question, filter_json, role, answer_pref, state)
     retrieved_reviews = retrieve_reviews(collection, semantic_query)
-    answer = generate_answer(question, semantic_query, retrieved_reviews, state)
+    answer = generate_answer(question, semantic_query, retrieved_reviews, role, answer_pref, state)
 
     return {
         "question": question,
@@ -420,6 +428,8 @@ def run_query(question: str, state: dict) -> dict:
         "semantic_query": semantic_query,
         "retrieved_reviews": retrieved_reviews,
         "answer": answer,
+        "role": role,
+        "answer_pref": answer_pref,
     }
 
 
