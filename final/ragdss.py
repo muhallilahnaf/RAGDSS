@@ -251,10 +251,19 @@ def vectorize_reviews(product_id: str, df_reviews_filtered: pd.DataFrame, state:
     if product_id in state["collections"]:
         return state["collections"][product_id]
 
-    collection = state["chroma_client"].create_collection(
-        name=collection_name,
-        embedding_function=state['embedding_function']
-    )
+    try:
+        collection = state["chroma_client"].get_collection(
+            name=collection_name,
+            embedding_function=state['embedding_function']
+        )
+        state["collections"][product_id] = collection
+        return collection
+    except Exception:
+        collection = state["chroma_client"].create_collection(
+            name=collection_name,
+            embedding_function=state['embedding_function']
+        )
+        # only add documents when freshly created
 
     df_target = df_reviews_filtered[df_reviews_filtered["id"] == product_id].copy()
     df_target = df_target.dropna(subset=["reviews.text"])
